@@ -10,6 +10,7 @@ models/
 
 data/
 
-**/*.py[cod] pycache/
+**/*.py[cod]
+pycache/
 
 .env
