@@ -1,0 +1,16 @@
+services:
+  - type: web
+    name: backend
+    dockerfilePath: ./backend/Dockerfile
+    startCommand: uvicorn backend.main:app --host 0.0.0.0 --port 8000
+    public: false 
+    
+  - type: web
+    name: frontend
+    dockerfilePath: ./frontend/Dockerfile
+    startCommand: streamlit run frontend/app.py --server.port 8501 --server.address 0.0.0.0
+    public: true
+    port: 8501
+    envVars:
+      - key: API_URL
+        value: http://backend:8000/predict
