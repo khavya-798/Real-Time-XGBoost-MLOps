@@ -1,22 +1,15 @@
-#Compiled Python files
 
-pycache/
-*.pyc
-
-#Virtual Environment
 
 venv/
 
-#Model/Data Artifacts (These are too large and should be tracked via DVC, but for now, ignore them)
 
-/models/*
-/data/*
 
-#Environment Variables
+models/
+
+
+
+data/
+
+**/*.py[cod] pycache/
 
 .env
-
-#Docker/Build Cache
-
-.dockerignore
-*.log
