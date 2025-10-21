@@ -1,6 +1,8 @@
 
-
 venv/
+
+
+data/
 
 
 
@@ -8,9 +10,8 @@ models/
 
 
 
-data/
-
 **/*.py[cod]
-pycache/
 
-.env
+
+
+pycache/
