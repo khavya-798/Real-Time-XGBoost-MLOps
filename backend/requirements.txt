@@ -1,0 +1,9 @@
+# requirements.txt for backend
+fastapi
+uvicorn
+pandas
+scikit-learn
+xgboost
+python-dotenv
+joblib
+numpy

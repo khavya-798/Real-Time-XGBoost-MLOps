@@ -1,0 +1,57 @@
+version: '3.8'
+
+services:
+  # --- 1. FastAPI Backend Service ---
+  backend:
+    build:
+      context: .
+      dockerfile: ./backend/Dockerfile
+    container_name: fraud_backend
+    volumes:
+      # Map the necessary folders from your local D: drive into the container
+      - ./backend:/app/backend
+      - ./models:/app/models # Model and preprocessors are read from here
+      - ./.env:/app/.env    # Configuration is read from here
+    ports:
+      # Expose port 8000 to the host machine for local debugging (optional but useful)
+      - "8000:8000"
+    environment:
+      # Reference the .env file for configuration
+      - MODEL_FILE=${MODEL_FILE}
+      # FIX: Set the Python path so Uvicorn can find the 'backend' package
+      - PYTHONPATH=/app
+    # Explicitly define the command to ensure Uvicorn starts correctly.
+    command: ["uvicorn", "backend.main:app", "--host", "0.0.0.0", "--port", "8000"]
+    
+    networks:
+      - fraud-net
+    restart: unless-stopped
+    
+  # --- 2. Streamlit Frontend Service ---
+  frontend:
+    build:
+      context: .
+      dockerfile: ./frontend/Dockerfile
+    container_name: fraud_frontend
+    volumes:
+      # Map the necessary folders
+      - ./frontend:/app/frontend
+      - ./data:/app/data   # Data is read from here
+      - ./.env:/app/.env   # Configuration is read from here
+    ports:
+      # Expose port 8501 to the host machine (where you access the UI)
+      - "8501:8501"
+    environment:
+      # Pass the API_URL to the Streamlit app
+      - API_URL=${API_URL}
+    # Ensure the frontend starts AFTER the backend is available
+    depends_on:
+      - backend
+    networks:
+      - fraud-net
+    restart: unless-stopped
+    
+# --- Docker Network ---
+networks:
+  fraud-net:
+    driver: bridge

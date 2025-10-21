@@ -1,0 +1,5 @@
+# requirements.txt for frontend (Streamlit UI)
+streamlit
+pandas
+requests
+python-dotenv
