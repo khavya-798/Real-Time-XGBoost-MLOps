@@ -18,6 +18,7 @@ COPY frontend/app.py /app/frontend/
 # Copy the dataset from the data folder to a known location inside the container
 COPY data/fraud.csv /app/data/fraud.csv
 
+COPY frontend/style.css /app/style.css
 # Expose the port Streamlit runs on
 EXPOSE 8501
 
