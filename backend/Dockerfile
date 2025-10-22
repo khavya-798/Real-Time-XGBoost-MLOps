@@ -1,22 +1,33 @@
-FROM python:3.10-slim
+# Dockerfile for Backend (FastAPI API - CORRECTED)
 
-# Set working directory
-# WORKDIR /app/backend # <-- This is where the container will work
+# 1. Use a stable, MODERN base image
+FROM python:3.10-slim-bullseye
 
-# Copy requirements and install dependencies
-# FIX: The context is the project root (.), so specify the path to the requirements file.
-COPY backend/requirements.txt /app/backend/requirements.txt 
+# Set the working directory inside the container
+WORKDIR /app  # <--- UNCOMMENTED and set to /app
 
-# RUN installation using the requirements file now at its destination path
-RUN pip install --no-cache-dir -r /app/backend/requirements.txt
+# Install system dependencies required by XGBoost (OpenMP runtime)
+RUN apt-get update \
+ && apt-get install -y --no-install-recommends libgomp1 \
+ && rm -rf /var/lib/apt/lists/*
 
-# FIX: The context is the project root (.), so specify the path to the Python files.
-COPY backend/main.py /app/backend/
-COPY backend/preprocess.py /app/backend/
-COPY ../.env /app/.env
+# Copy the backend-specific requirements file first (for layer caching)
+COPY backend/requirements.txt /app/requirements.txt
 
-# Expose the port FastAPI runs on
+# 2. Install all dependencies
+RUN pip install --no-cache-dir -r /app/requirements.txt
+
+# 3. Copy the backend application code into the working directory
+COPY ./backend/ /app/
+# Copy models required for the application (baked into the image for Render)
+COPY ./models/ /app/models/
+
+# Copy .env file if it's in the project root and needed at runtime
+# Consider using Render's Environment Variables instead for secrets/config
+# COPY .env /app/.env
+
+# Expose the port (FastAPI default)
 EXPOSE 8000
 
-# Command to run the application
+# 4. Define the startup command (runs from /app where main.py now is)
 CMD ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8000"]
