@@ -1,33 +1,44 @@
-# Dockerfile for Backend (FastAPI API - CORRECTED)
+# Dockerfile for Backend (FastAPI API - CORRECTED WITH CORRECT TRAINING SCRIPT)
 
 # 1. Use a stable, MODERN base image
 FROM python:3.10-slim-bullseye
 
 # Set the working directory inside the container
-WORKDIR /app  # <--- UNCOMMENTED and set to /app
+WORKDIR /app
 
-# Install system dependencies required by XGBoost (OpenMP runtime)
+# Install system dependencies required by XGBoost
 RUN apt-get update \
  && apt-get install -y --no-install-recommends libgomp1 \
  && rm -rf /var/lib/apt/lists/*
 
-# Copy the backend-specific requirements file first (for layer caching)
+# Copy requirements first
 COPY backend/requirements.txt /app/requirements.txt
 
-# 2. Install all dependencies
+# Install all dependencies (ensure training dependencies are included if different)
+# NOTE: If local_train.py needs libraries not in backend/requirements.txt,
+# you might need to copy and install from notebooks/requirements.txt too,
+# or merge the requirements.
 RUN pip install --no-cache-dir -r /app/requirements.txt
 
-# 3. Copy the backend application code into the working directory
+# --- ADD TRAINING STEPS ---
+# Copy necessary files for training
+COPY data/Fraud.csv /app/data/Fraud.csv
+COPY notebooks/local_train.py /app/local_train.py # <-- COPY CORRECT SCRIPT
+
+# RUN the training script - This will create the /app/models folder INSIDE the image
+RUN python /app/local_train.py # <-- RUN CORRECT SCRIPT
+
+# Clean up data and script if not needed at runtime (optional)
+# RUN rm /app/data/Fraud.csv
+# RUN rm /app/local_train.py
+# --- END TRAINING STEPS ---
+
+# Copy the rest of the backend application code
 COPY ./backend/ /app/
-# Copy models required for the application (baked into the image for Render)
-COPY ./models/ /app/models/
+# NOTE: No need to copy ./models/ anymore, it's created by local_train.py run above
 
-# Copy .env file if it's in the project root and needed at runtime
-# Consider using Render's Environment Variables instead for secrets/config
-# COPY .env /app/.env
-
-# Expose the port (FastAPI default)
+# Expose the port
 EXPOSE 8000
 
-# 4. Define the startup command (runs from /app where main.py now is)
+# Define the startup command (Ensure main.py and app exist in /app)
 CMD ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8000"]
