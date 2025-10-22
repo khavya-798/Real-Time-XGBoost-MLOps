@@ -5,7 +5,7 @@ from fastapi.responses import RedirectResponse # Import required for redirect
 from pydantic import BaseModel, Field
 import numpy as np
 import xgboost as xgb
-from .preprocess import load_transformers, preprocess_transaction, TRANSFORMERS_PATH
+from preprocess import load_transformers, preprocess_transaction, TRANSFORMERS_PATH
 
 load_dotenv()
 
