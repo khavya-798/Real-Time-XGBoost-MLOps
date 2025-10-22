@@ -1,0 +1,34 @@
+# .dockerignore
+
+# Git
+.git
+.gitignore
+.gitattributes
+
+# Python Virtual Environment
+venv/
+*.venv
+.env
+
+# Python cache
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+
+# OS generated files
+.DS_Store
+Thumbs.db
+
+# IDE files
+.vscode/
+.idea/
+
+# Notebook Checkpoints
+notebooks/.ipynb_checkpoints/
+
+# Data - We COPY this explicitly in Dockerfile, so ignore from context
+# data/  <-- Keep this commented out FOR NOW to test the COPY command
+
+# Models - These are generated INSIDE the container during build
+models/
