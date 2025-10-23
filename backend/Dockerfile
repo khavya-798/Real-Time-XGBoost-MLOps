@@ -7,9 +7,10 @@ FROM python:3.10-slim-bullseye
 WORKDIR /app
 
 # Install system dependencies (including unzip for data extraction)
+# Use backslash (\) to continue the RUN command across lines
 RUN apt-get update \
- && apt-get install -y --no-install-recommends libgomp1 unzip \ # <-- Added unzip
- && rm -rf /var/lib/apt/lists/*
+ && apt-get install -y --no-install-recommends libgomp1 unzip \
+ && rm -rf /var/lib/apt/lists/* # <-- Corrected continuation
 
 # Copy requirements first (for better layer caching)
 COPY backend/requirements.txt /app/requirements.txt
@@ -19,14 +20,14 @@ RUN pip install --no-cache-dir -r /app/requirements.txt
 
 # --- ADD TRAINING STEPS ---
 # Copy necessary files for training into the container's /app directory
-COPY data/archive.zip /app/data/archive.zip # <-- Copy the CORRECT ZIP file
+COPY data/archive.zip /app/data/archive.zip
 COPY notebooks/local_train.py /app/local_train.py
 
 # RUN the training script - This script now handles unzipping archive.zip
 RUN python /app/local_train.py
 
 # Clean up zip file and script if not needed at runtime (optional, saves image space)
-RUN rm /app/data/archive.zip # <-- Clean up CORRECT ZIP after use
+RUN rm /app/data/archive.zip
 # RUN rm /app/local_train.py
 # --- END TRAINING STEPS ---
 
