@@ -16,7 +16,6 @@ RUN pip install --no-cache-dir -r /app/frontend/requirements.txt
 # Copy frontend/app.py to /app/frontend/
 COPY frontend/app.py /app/frontend/
 # Copy the dataset from the data folder to a known location inside the container
-COPY data/fraud.csv /app/data/fraud.csv
 
 COPY frontend/style.css /app/style.css
 # Expose the port Streamlit runs on
