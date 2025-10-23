@@ -27,8 +27,8 @@ Thumbs.db
 # Notebook Checkpoints
 notebooks/.ipynb_checkpoints/
 
-# Data - We COPY this explicitly in Dockerfile, so ignore from context
-# data/  <-- Keep this commented out FOR NOW to test the COPY command
+# Data - Is downloaded during build, ignore local copy from context
+# data/ # <-- Keep this commented out or remove if build still fails finding data/
 
 # Models - These are generated INSIDE the container during build
 models/
