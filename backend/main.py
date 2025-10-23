@@ -1,103 +1,135 @@
+# /backend/main.py - Corrected FastAPI App
+
 import os
-from dotenv import load_dotenv
-from fastapi import FastAPI
-from fastapi.responses import RedirectResponse # Import required for redirect
+import joblib
+import pandas as pd
+from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel, Field
+from fastapi.responses import RedirectResponse
+from fastapi.middleware.cors import CORSMiddleware
+import xgboost as xgb # Import xgboost
 import numpy as np
-import xgboost as xgb
-from preprocess import load_transformers, preprocess_transaction, TRANSFORMERS_PATH
 
-load_dotenv()
+# --- Configuration & Model/Preprocessor Loading ---
+MODEL_PATH = "models/xgboost_fraud_model.json"
+PREPROC_PATH = "models/preprocessing_transformers.joblib"
 
-# --- Configuration ---
-MODEL_FILE = os.getenv("MODEL_FILE", "xgboost_fraud_model.json")
-MODEL_PATH = f"/app/models/{MODEL_FILE}" 
-
-# --- Pydantic Schema ---
-class Transaction(BaseModel):
-    step: int = Field(..., description="Map time step to a day (integer)")
-    type: str = Field(..., description="Type of transaction (e.g., CASH_OUT, PAYMENT)")
-    amount: float = Field(..., description="Transaction amount")
-    nameOrig: str = Field(..., description="Customer who initiated the transaction")
-    oldbalanceOrg: float = Field(..., description="Original balance before transaction")
-    newbalanceOrig: float = Field(..., description="New balance after transaction")
-    nameDest: str = Field(..., description="Customer who is the recipient of the transaction")
-    oldbalanceDest: float = Field(..., description="Original balance at recipient before transaction")
-    newbalanceDest: float = Field(..., description="New balance at recipient after transaction")
-    isFlaggedFraud: int = Field(..., description="Indicates if the system flagged the transaction (0 or 1)")
-
-# --- Global Model and State (Initialization MUST happen here) ---
 MODEL = None
+PREPROCESSORS = None
 INITIALIZATION_ERROR = None
-MODEL_FEATURE_NAMES = None
+
+# Define feature columns (must match training script)
+CAT_COLS = ['type']
+ORG_NUM_COLS = ['amount', 'oldbalanceOrg', 'newbalanceOrig', 'oldbalanceDest', 'newbalanceDest', 'step']
+NEW_NUM_FEATURES = ['balance_error', 'drained_account']
+ALL_NUM_COLS = ORG_NUM_COLS + NEW_NUM_FEATURES
 
 try:
+    # Load the XGBoost model
     MODEL = xgb.XGBClassifier()
     MODEL.load_model(MODEL_PATH)
-    MODEL_FEATURE_NAMES = MODEL.get_booster().feature_names
     
-    if not load_transformers():
-        raise Exception(f"Failed to load preprocessing transformers at {TRANSFORMERS_PATH}")
+    # Load the dictionary of preprocessors
+    PREPROCESSORS = joblib.load(PREPROC_PATH)
+    
+    if 'scaler' not in PREPROCESSORS or 'encoder' not in PREPROCESSORS or 'feature_names' not in PREPROCESSORS:
+        raise Exception("Preprocessors file is missing 'scaler', 'encoder', or 'feature_names'.")
         
     print("Backend ready: Model and Preprocessors initialized successfully.")
 
 except Exception as e:
     INITIALIZATION_ERROR = f"Initialization failed: {e}"
     MODEL = None
+    PREPROCESSORS = None
     print(f"FATAL ERROR during startup: {INITIALIZATION_ERROR}")
-    
+
+# --- Pydantic Input Schema (7 Fields) ---
+class TransactionData(BaseModel):
+    step: int = Field(..., example=1)
+    type: str = Field(..., example='PAYMENT')
+    amount: float = Field(..., example=181.0)
+    oldbalanceOrg: float = Field(..., example=181.0)
+    newbalanceOrig: float = Field(..., example=0.0)
+    oldbalanceDest: float = Field(..., example=0.0)
+    newbalanceDest: float = Field(..., example=0.0)
+
+# --- FastAPI App Initialization ---
 app = FastAPI(
     title="Real-Time Fraud Detection API",
     description="MLOps-ready API for XGBoost-based fraud prediction."
 )
 
-# --- Endpoints ---
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"], # Allow all origins
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 
-@app.get("/", include_in_schema=False) # Exclude this endpoint from documentation schema
+# --- API Endpoints ---
+@app.get("/", include_in_schema=False)
 def root_redirect():
     """Redirects the root URL to the interactive API documentation."""
-    # We redirect to /docs for the Swagger UI interface
     return RedirectResponse(url="/docs")
 
 @app.get("/health")
 def health_check():
     """Standard health check, returns model status."""
     return {
-        "status": "ok", 
-        "model_loaded": (MODEL is not None),
+        "status": "ok",
+        "model_loaded": (MODEL is not None and PREPROCESSORS is not None),
         "model_path": MODEL_PATH,
-        "error_detail": INITIALIZATION_ERROR if MODEL is None else None
+        "preprocessor_path": PREPROC_PATH,
+        "error_detail": INITIALIZATION_ERROR
     }
 
 @app.post("/predict")
-def predict_fraud(transaction: Transaction):
-    """Prediction endpoint."""
-    
-    # Check if initialization was successful globally
-    if MODEL is None:
-        return {"error": "MLOps service is not initialized. Model files missing or corrupted."}
-    
-    transaction_dict = transaction.model_dump()
-    
+def predict_fraud(data: TransactionData):
+    """Predicts fraud based on transaction details."""
+    if MODEL is None or PREPROCESSORS is None:
+        raise HTTPException(status_code=503, detail=f"Service not initialized: {INITIALIZATION_ERROR}")
+
     try:
-        # 1. Preprocess (load_transformers() inside preprocess.py handles its own caching/loading)
-        data = preprocess_transaction(transaction_dict, MODEL_FEATURE_NAMES) 
+        input_data_dict = data.model_dump()
+        input_df = pd.DataFrame([input_data_dict])
 
-        # 2. Make prediction
-        prediction = MODEL.predict(data)[0]
-        probability = MODEL.predict_proba(data)[0][1] 
+        # 1. Feature Engineering (match training)
+        input_df['balance_error'] = input_df['oldbalanceOrg'] - input_df['newbalanceOrig'] - input_df['amount']
+        input_df['drained_account'] = (input_df['newbalanceOrig'] == 0).astype(int)
 
-        is_fraud = bool(prediction)
+        # 2. Preprocessing (match training)
+        scaler = PREPROCESSORS['scaler']
+        encoder = PREPROCESSORS['encoder']
+        feature_names_out = PREPROCESSORS['feature_names']
         
+        input_cat = input_df[CAT_COLS]
+        input_num = input_df[ALL_NUM_COLS] # Includes engineered features
+
+        encoded_cat_array = encoder.transform(input_cat)
+        encoded_cat_df = pd.DataFrame(encoded_cat_array, columns=encoder.get_feature_names_out(CAT_COLS), index=input_df.index)
+
+        scaled_num_array = scaler.transform(input_num)
+        scaled_num_df = pd.DataFrame(scaled_num_array, columns=ALL_NUM_COLS, index=input_df.index)
+
+        # Combine features
+        processed_df = pd.concat([scaled_num_df, encoded_cat_df], axis=1)
+
+        # 3. Reindex columns to match training order (CRUCIAL)
+        processed_df = processed_df.reindex(columns=feature_names_out, fill_value=0)
+
+        # 4. Predict class and probability
+        prediction = MODEL.predict(processed_df)
+        proba_array = MODEL.predict_proba(processed_df)
+
+        is_fraud_value = int(prediction[0])
+        probability_value = float(proba_array[0][1]) # Get probability of fraud (class 1)
+
         return {
-            "prediction": int(prediction),
-            "is_fraud": is_fraud,
-            "probability_fraud": float(probability),
-            "message": "Fraud detected by XGBoost" if is_fraud else "Transaction is likely genuine"
+            "is_fraud": is_fraud_value, 
+            "probability": probability_value # <-- Correct key for frontend
         }
 
     except Exception as e:
-        print(f"Prediction error during inference: {e}")
-        return {"error": f"Prediction pipeline failed during inference: {type(e).__name__}"}
-
-    
+        print(f"Prediction Error: {e}") # Log the error
+        raise HTTPException(status_code=500, detail=f"Error during prediction processing: {str(e)}")
