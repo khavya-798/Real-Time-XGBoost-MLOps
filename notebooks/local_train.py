@@ -12,7 +12,7 @@ import zipfile # Import zipfile
 
 # --- Configuration (Paths relative to /app in Docker) ---
 ZIP_FILE_PATH = "data/archive.zip" # Path to zip file inside container
-CSV_FILE_NAME = "fraud.csv"      # Name of the file inside the zip
+CSV_FILE_NAME = "Fraud.csv"      # Name of the file inside the zip
 DATA_DIR = "data"                # Directory to extract to inside container
 MODEL_DIR = "models"             # Directory to save models inside container
 MODEL_FILE_NAME = "xgboost_fraud_model.json"
