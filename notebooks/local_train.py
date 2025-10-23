@@ -8,12 +8,13 @@ from sklearn.model_selection import train_test_split
 from sklearn.preprocessing import OneHotEncoder
 import joblib
 import os
+import zipfile # <-- Add this import
 
-# --- Configuration (Matching your notebook) ---
-ORG_FILE = "data/fraud.csv"  # Path to your local data file
-# FIX: Use the absolute path based on the current execution directory (CWD)
-# We assume CWD is D:\fraud-MlOps and the model should go in D:\fraud-MlOps\models
-MODEL_DIR = os.path.join(os.getcwd(), "models") 
+# --- Configuration ---
+ZIP_FILE_PATH = "data/archive.zip" # <-- Path to zip file
+CSV_FILE_NAME = "fraud.csv"      # <-- Name of the file inside the zip
+DATA_DIR = "data"                # <-- Directory to extract to
+MODEL_DIR = os.path.join(os.getcwd(), "models")
 MODEL_FILE_NAME = "xgboost_fraud_model.json"
 PREPROC_FILE_NAME = "preprocessing_transformers.joblib"
 
@@ -25,15 +26,28 @@ ALL_NUM_COLS = ORG_NUM_COLS + ['balance_error', 'drained_account']
 
 # Ensure the models directory exists
 os.makedirs(MODEL_DIR, exist_ok=True)
-
+# Ensure data directory exists for extraction
+os.makedirs(DATA_DIR, exist_ok=True)
 print("--- Starting Local Training Script ---")
 
-# --- 1. Load Data ---
+# --- 1. Unzip and Load Data ---
+print(f"Attempting to unzip {ZIP_FILE_PATH}...")
 try:
-    df = pd.read_csv(ORG_FILE)
+    with zipfile.ZipFile(ZIP_FILE_PATH, 'r') as zip_ref:
+        # Extract the specific CSV file to the data directory
+        zip_ref.extract(CSV_FILE_NAME, path=DATA_DIR)
+    print(f"Successfully extracted {CSV_FILE_NAME} to {DATA_DIR}/")
+
+    # Define the path to the extracted CSV
+    extracted_csv_path = os.path.join(DATA_DIR, CSV_FILE_NAME)
+
+    df = pd.read_csv(extracted_csv_path)
     print(f"Data loaded successfully. Total rows: {len(df)}")
 except FileNotFoundError:
-    print(f"ERROR: Data file not found at {ORG_FILE}. Please check your 'data' folder.")
+    print(f"ERROR: Zip file not found at {ZIP_FILE_PATH} or CSV ({CSV_FILE_NAME}) not inside zip.")
+    exit()
+except Exception as e:
+    print(f"ERROR during unzip or load: {e}")
     exit()
 
 # --- 2. Stratified Split (Simplified) ---
